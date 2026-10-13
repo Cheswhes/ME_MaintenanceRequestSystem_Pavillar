@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Maintenance Request</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 850px; margin: 2rem auto; padding: 0 1rem; }
+    section { margin-bottom: 1.5rem; }
+    input, button { padding: 6px 10px; margin: 2px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { border: 1px solid #ccc; padding: 6px; text-align: left; }
+    th { background: #f3f3f3; }
+    .highlight { background: #ffe0e0; font-weight: bold; }
+    #message { min-height: 1.2em; font-weight: 600; }
+    .err { color: #b00020; }
+    .ok { color: #1b7f3b; }
+  </style>
+</head>
+<body>
+
+  <h1>Maintenance Request</h1>
+  <p id="message"></p>
+
+  <section>
+    <h2>Add Record</h2>
+    <div id="form"></div>
+    <button onclick="addRecord()">Add</button>
+  </section>
+
+  <section>
+    <h2>Search by ID</h2>
+    <input id="searchId" type="number" placeholder="ID" />
+    <button onclick="searchRecord()">Search</button>
+    <button onclick="loadAll()">Show All</button>
+  </section>
+
+  <section>
+    <h2>Records</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>id</th><th>requester</th><th>location</th><th>problem</th><th>priority</th><th>action</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </section>
+
+  <script>
+    const API = "/api/requests";
+    const fields = ["requester", "location", "problem", "priority"];
+
+    
+    document.getElementById("form").innerHTML = fields
+      .map(f => `<input id="f_${f}" type="text" placeholder="${f}" title="${f}" />`).join("");
+
+    function show(text, isOk) {
+      const m = document.getElementById("message");
+      m.textContent = text;
+      m.className = isOk ? "ok" : "err";
+    }
+
+    function render(list) {
+      document.getElementById("tbody").innerHTML = list.map(r => {
+        const isHigh = String(r.priority).toLowerCase() === "high";
+        return `
+          <tr class="${isHigh ? 'highlight' : ''}">
+            <td>${r.id ?? ''}</td>
+            <td>${r.requester ?? ''}</td>
+            <td>${r.location ?? ''}</td>
+            <td>${r.problem ?? ''}</td>
+            <td>${r.priority ?? ''}</td>
+            <td><button onclick="deleteRecord(${r.id})">Delete</button></td>
+          </tr>`;
+      }).join("");
+    }
+
+    async function loadAll() {
+      const res = await fetch(API);
+      render(await res.json());
+    }
+
+    async function searchRecord() {
+      const id = document.getElementById("searchId").value;
+      if (!id) return show("Enter an ID to search.", false);
+
+      const res = await fetch(`${API}/${id}`);
+      const data = await res.json();
+      
+      if (!res.ok) {
+        render([]);
+        return show(data.error, false);
+      }
+      show(`Found record ${id}`, true);
+      render([data]);
+    }
+
+    async function addRecord() {
+      const body = {};
+      fields.forEach(f => body[f] = document.getElementById(`f_${f}`).value.trim());
+
+      const res = await fetch(API, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      });
+      const data = await res.json();
+
+      if (!res.ok) return show(data.error, false);
+      
+      fields.forEach(f => document.getElementById(`f_${f}`).value = "");
+      show(`Added record ${data.id}`, true);
+      loadAll();
+    }
+
+    async function deleteRecord(id) {
+      const res = await fetch(`${API}/${id}`, { method: "DELETE" });
+      const data = await res.json();
+
+      if (!res.ok) return show(data.error, false);
+      show(data.message, true);
+      loadAll();
+    }
+
+    loadAll();
+  </script>
+</body>
+</html>
